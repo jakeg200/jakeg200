@@ -1,0 +1,24 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+
+      # SPEC.md §10: the blocking evals. Leakage at zero, false accusation under 2%.
+      # No ANTHROPIC_API_KEY is set, so llm.py runs in replay mode and nothing reaches
+      # the network — which is the point of a deterministic eval.
+      - name: blocking evals
+        run: python -m evals.run_all
+
+      - run: pytest -q
+      - run: ruff check atrium evals tests
+      - name: mypy strict on verify/ and policy/
+        run: python -m mypy atrium/verify atrium/policy

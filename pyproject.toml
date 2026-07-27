@@ -1,0 +1,60 @@
+[project]
+name = "atrium"
+version = "0.1.0"
+description = "A room you enter and stay in until a concept clicks."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "sympy>=1.12",
+]
+
+[project.optional-dependencies]
+# The runtime needs these; the deterministic core (verify/, policy/, model/) does not,
+# which is what keeps the blocking evals runnable in a bare CI container.
+runtime = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "websockets>=12",
+    "redis>=5",
+    "sqlmodel>=0.0.22",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    "anthropic>=0.40",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["atrium*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "evals"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+# UP042 wants enum.StrEnum. SPEC.md writes these as `class MoveType(str, Enum)` and they are
+# quoted that way in the spec, in DECISIONS.md, and in the eval fixtures — the shapes stay
+# recognisable against the document they came from.
+ignore = ["UP042"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+# Strict on the two subsystems where a type error is a safety failure. SPEC.md §11.
+[[tool.mypy.overrides]]
+module = ["atrium.verify.*", "atrium.policy.*"]
+strict = true
