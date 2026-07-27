@@ -1,16 +1,39 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: help venv install db-up db-down migrate seed dev test eval lint typecheck fmt check web-dev demo
+# The first python on this machine that is new enough. Override with `make PYTHON=... install`.
+PYTHON ?= $(shell for p in python3.14 python3.13 python3.12 python3 python; do \
+	command -v $$p >/dev/null 2>&1 && \
+	$$p -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,12) else 1)' 2>/dev/null && \
+	{ echo $$p; break; }; done)
+
+.PHONY: help venv install db-up db-down migrate seed dev test eval lint typecheck fmt check \
+        web-dev web-install demo up local
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 venv: ## create the virtualenv
-	python3.12 -m venv .venv
+	@test -n "$(PYTHON)" || { \
+		echo "No python 3.12+ found. Install one, or run: make PYTHON=/path/to/python install"; \
+		exit 1; }
+	@echo "using $(PYTHON) ($$($(PYTHON) --version))"
+	$(PYTHON) -m venv .venv
 
 install: venv ## install python deps
+	$(PIP) install -q --upgrade pip
 	$(PIP) install -q -e ".[dev]"
+	@echo "ready. try: make demo"
+
+web-install: ## install frontend deps
+	cd web && npm install --no-audit --no-fund
+
+local: install web-install ## everything needed to run it on this machine
+	@echo
+	@echo "  Now, in two terminals:"
+	@echo "    make dev        # api  on http://localhost:8000"
+	@echo "    make web-dev    # web  on http://localhost:3000"
+	@echo
 
 db-up: ## start postgres 16
 	docker compose up -d db
