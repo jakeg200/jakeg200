@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -e ".[dev]"
+      - name: lint
+        run: |
+          .venv/bin/ruff check warrant evals tests
+          .venv/bin/ruff format --check warrant evals tests
+      - name: typecheck
+        run: .venv/bin/mypy warrant/verify
+      - name: test
+        run: .venv/bin/python -m pytest -q
+      # The eval harness runs offline from the deterministic pipeline, so it needs no
+      # API key and no database. It fails the build if the false accusation rate goes
+      # above 2%, or if any probe ever contains the answer.
+      - name: eval
+        run: .venv/bin/python evals/run_eval.py
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build

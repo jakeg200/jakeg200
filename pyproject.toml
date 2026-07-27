@@ -1,0 +1,55 @@
+[project]
+name = "warrant"
+version = "0.1.0"
+description = "An instrument that reads reasoning, locates the first step that does not follow, and accumulates verified claims about what a learner can derive unaided."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlmodel>=0.0.22",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "sympy>=1.13",
+    "anthropic>=0.40",
+    "pydantic-settings>=2.4",
+    "cryptography>=43",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["warrant*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+# Strict only where correctness is load-bearing. The verifier ladder decides whether
+# we are allowed to tell a person they are wrong; it gets the strict treatment.
+[[tool.mypy.overrides]]
+module = "warrant.verify.*"
+strict = true
+disallow_any_explicit = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

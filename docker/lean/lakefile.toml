@@ -1,0 +1,10 @@
+name = "warrant_lean"
+defaultTargets = ["WarrantLean"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.15.0"
+
+[[lean_lib]]
+name = "WarrantLean"
