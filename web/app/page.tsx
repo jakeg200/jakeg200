@@ -67,6 +67,10 @@ export default function Room() {
       if (message.type === "joined") setProducer(Boolean(message.producer));
       if (message.type === "stroke") setRemote((prev) => [...prev, message as Stroke]);
       if (message.type === "tutor") setTurns((prev) => [...prev, message as Turn]);
+      // A recognition or realisation failure — e.g. no ANTHROPIC_API_KEY, or a leakage block
+      // with nothing safe left to say. Surfaced rather than silently dropped (§10: silence is
+      // supposed to mean "nothing to say," not "something broke").
+      if (message.type === "error") setError(String(message.detail));
     };
 
     // The idle tick. The server needs a clock it can trust for stall detection (§6).

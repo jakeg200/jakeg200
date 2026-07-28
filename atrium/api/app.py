@@ -17,9 +17,12 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from ..llm import LLMError
 from ..model.readable import ReadableState
 from ..model.skills import ClaimLevel, SkillView
+from ..observe.recognise import VisionRecogniser
 from ..observe.strokes import Point, Stroke
+from ..policy.leakage import LeakageBlocked
 from ..seed.linear_equations import PROBLEMS, SKILLS, TITLE, TOPIC_ID
 from ..session.runtime import Session, Topic
 
@@ -90,7 +93,11 @@ def open_session(body: OpenSession) -> SessionOpened:
         if not chosen:
             raise HTTPException(404, f"no problem {body.problem_id}")
         topic.problems = chosen
-    session = Session(topic, body.learner_id)
+    # `Session` defaults to `NullRecogniser` — it exists so tests can script known readings
+    # without a model call, but it silently echoes the previous (empty) reading back, so a
+    # session opened without this line never produces a single canvas event no matter what is
+    # drawn. The API is the one caller that has to mean it.
+    session = Session(topic, body.learner_id, recogniser=VisionRecogniser())
     SESSIONS[session.id] = session
     return SessionOpened(session_id=session.id, topic_id=topic.id, problem=session.problem)
 
@@ -185,26 +192,35 @@ async def room(socket: WebSocket, session_id: str) -> None:
             elif kind == "snapshot" and client.is_producer:
                 import base64
 
-                png = base64.b64decode(message["png"])
-                events = session.on_snapshot(png, t_s)
-                await socket.send_json(
-                    {"type": "recognised", "events": [e.model_dump() for e in events]}
-                )
-                move, text = session.step(t_s)
-                if text:
+                try:
+                    png = base64.b64decode(message["png"])
+                    events = session.on_snapshot(png, t_s)
                     await socket.send_json(
-                        {"type": "tutor", "move": move.type.value, "text": text}
+                        {"type": "recognised", "events": [e.model_dump() for e in events]}
                     )
+                    move, text = session.step(t_s)
+                    if text:
+                        await socket.send_json(
+                            {"type": "tutor", "move": move.type.value, "text": text}
+                        )
+                except (LLMError, LeakageBlocked) as exc:
+                    # A recognition or realisation failure is data, not a reason to drop the
+                    # socket — the alternative is a room that goes silently dead the moment a
+                    # snapshot fails, which is indistinguishable from "nothing to say".
+                    await socket.send_json({"type": "error", "detail": str(exc)})
 
             elif kind == "speech" and client.is_producer:
-                session.on_learner_speech(
-                    message["text"], t_s, is_question=bool(message.get("question"))
-                )
-                move, text = session.step(t_s)
-                if text:
-                    await socket.send_json(
-                        {"type": "tutor", "move": move.type.value, "text": text}
+                try:
+                    session.on_learner_speech(
+                        message["text"], t_s, is_question=bool(message.get("question"))
                     )
+                    move, text = session.step(t_s)
+                    if text:
+                        await socket.send_json(
+                            {"type": "tutor", "move": move.type.value, "text": text}
+                        )
+                except (LLMError, LeakageBlocked) as exc:
+                    await socket.send_json({"type": "error", "detail": str(exc)})
 
             elif kind == "tick":
                 boundary = session.tick(t_s)
