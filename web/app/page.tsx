@@ -21,6 +21,7 @@ type Turn = { move: string; text: string };
 export default function Room() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [problem, setProblem] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [remote, setRemote] = useState<Stroke[]>([]);
   const [producer, setProducer] = useState(true);
@@ -30,15 +31,26 @@ export default function Room() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await fetch(`${API}/sessions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ learner_id: "demo", problem_id: "le-03" }),
-      });
-      const body = await res.json();
-      if (cancelled) return;
-      setSessionId(body.session_id);
-      setProblem(body.problem.statement);
+      try {
+        const res = await fetch(`${API}/sessions`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ learner_id: "demo", problem_id: "le-03" }),
+        });
+        if (!res.ok) throw new Error(`${API} answered ${res.status}`);
+        const body = await res.json();
+        if (cancelled) return;
+        setSessionId(body.session_id);
+        setProblem(body.problem.statement);
+      } catch (cause) {
+        if (cancelled) return;
+        // A bare "Failed to fetch" is either a dead backend or a blocked preflight, and the
+        // browser deliberately won't tell you which. Say both rather than neither.
+        setError(
+          `Couldn't reach the API at ${API}. Is it running (uvicorn atrium.api.app:app --reload), ` +
+            `and is this origin in ATRIUM_ALLOWED_ORIGINS? (${(cause as Error).message})`,
+        );
+      }
     })();
     return () => {
       cancelled = true;
@@ -96,6 +108,10 @@ export default function Room() {
           <span className="text-xs uppercase tracking-widest text-ink/40">watching</span>
         )}
       </header>
+
+      {error && (
+        <p className="border-b border-rule bg-ink/5 px-8 py-3 text-sm text-ink/70">{error}</p>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">

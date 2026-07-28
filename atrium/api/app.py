@@ -10,9 +10,11 @@ no `org_id` is only half of the commitment.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ..model.readable import ReadableState
@@ -22,6 +24,26 @@ from ..seed.linear_equations import PROBLEMS, SKILLS, TITLE, TOPIC_ID
 from ..session.runtime import Session, Topic
 
 app = FastAPI(title="Atrium", version="0.1.0")
+
+#: The room runs on :3000 and the API on :8000, which is cross-origin — without this the browser
+#: blocks the preflight and every fetch fails before it reaches a route. Origins are an explicit
+#: allowlist rather than `*`: D3 makes this API the learner's own data, and a wildcard on something
+#: that serves `/learners/{id}/export` is not a dev convenience worth having.
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "ATRIUM_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 #: In-memory for M0. Redis holds this in production (§4, §11); sessions are reconstructible from
 #: the event log either way.

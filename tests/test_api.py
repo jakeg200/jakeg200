@@ -73,6 +73,34 @@ def test_a_missing_session_is_refused(client: TestClient) -> None:
         socket.receive_json()
 
 
+def test_the_browser_preflight_passes(client: TestClient) -> None:
+    """The room is served from :3000 and the API from :8000 — every call is cross-origin.
+
+    Without CORS the browser blocks the preflight and the first fetch fails before it reaches a
+    route, which surfaces as an opaque "Failed to fetch" with a perfectly healthy server.
+    """
+    response = client.options(
+        "/sessions",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_unlisted_origins_are_not_allowed(client: TestClient) -> None:
+    """No wildcard: D3 makes this the learner's own data, and `/learners/{id}/export` is on it."""
+    response = client.post(
+        "/sessions",
+        json={"learner_id": "l1", "problem_id": "le-03"},
+        headers={"Origin": "https://somewhere-else.example"},
+    )
+    assert "access-control-allow-origin" not in response.headers
+
+
 def test_the_learner_can_export_and_delete_their_model(client: TestClient) -> None:
     """DECISIONS.md D3: ownership that cannot be exercised is not ownership."""
     _open(client)

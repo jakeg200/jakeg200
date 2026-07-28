@@ -9,7 +9,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      {/* Extensions (Grammarly and friends) inject attributes onto <body> before React
+          hydrates, which reads as a mismatch. Suppressing it here is the standard fix and
+          only covers this element's own attributes. */}
+      <body className="antialiased" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
